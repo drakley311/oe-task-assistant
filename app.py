@@ -1,20 +1,19 @@
 import os
-import openai
+from openai import OpenAI
 from flask import Flask, request, render_template
 
 app = Flask(__name__)
 
-# Load API key from environment
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+# Set up the OpenAI client
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
     if request.method == 'POST':
         prompt = request.form.get('prompt', '')
-        
-        # Format the user input with GPT
+
         try:
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are an assistant that converts user prompts into formatted Microsoft Planner tasks for the OE Action Review board. Follow the MS Planner Card Standard."},
