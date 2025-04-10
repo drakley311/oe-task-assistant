@@ -14,7 +14,7 @@ def home():
 
         try:
             response = client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",  # Using a model available to all API users
                 messages=[
                     {"role": "system", "content": "You are an assistant that converts user prompts into formatted Microsoft Planner tasks for the OE Action Review board. Follow the MS Planner Card Standard."},
                     {"role": "user", "content": prompt}
