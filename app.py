@@ -29,9 +29,9 @@ SCOPE = [
     "User.Read"
 ]
 
-# === REPLACE THESE AFTER YOU GET THE RIGHT IDs ===
-TARGET_GROUP_ID = "REPLACE_THIS"
-TARGET_PLAN_ID = "REPLACE_THIS"
+# ✅ HARDCODED Planner target — no more lookups
+TARGET_GROUP_ID = "51bc2ed3-a2b0-4930-aa2a-a87e76fcb55e"
+TARGET_PLAN_ID = "_npgkc4RPUydQZTi2F6T2mUABa7d"
 
 def get_ms_headers():
     return {
@@ -47,7 +47,7 @@ def create_planner_task(title, notes):
             "planId": TARGET_PLAN_ID,
             "title": title,
             "assignments": {},
-            "bucketId": None  # Optional
+            "bucketId": None  # Optional: add a fixed bucket ID if needed
         }
     )
     if task_resp.status_code >= 400:
@@ -113,20 +113,3 @@ def oauth_callback():
     )
     session["ms_token"] = token
     return redirect(url_for("home"))
-
-@app.route("/myplans")
-def list_user_plans():
-    try:
-        plans_resp = requests.get(
-            "https://graph.microsoft.com/v1.0/me/planner/plans",
-            headers=get_ms_headers()
-        )
-        plans = plans_resp.json().get("value", [])
-        output = "\n".join([f"Plan Title: {p['title']}\nPlan ID: {p['id']}\nGroup ID: {p['owner']}\n---" for p in plans])
-        return f"<h2>Your Microsoft Planner Plans</h2><pre>{output}</pre><br><a href='/'>Back</a>"
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
