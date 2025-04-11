@@ -67,22 +67,14 @@ def get_group_and_plan_ids():
     return group_id, plan_id
 
 def create_planner_task(plan_id, title, notes):
-    task_payload = {
-        "planId": plan_id,
-        "title": title,
-        "details": {
-            "description": notes
-        }
-    }
-
-    # Create task (must POST to /tasks, then PATCH details)
     task_resp = requests.post(
         "https://graph.microsoft.com/v1.0/planner/tasks",
         headers=get_ms_headers(),
         json={
             "planId": plan_id,
             "title": title,
-            "bucketId": None  # Optional: Fill if needed
+            "assignments": {},
+            "bucketId": None  # Optional: Add if needed
         }
     )
 
@@ -127,4 +119,31 @@ def process_prompt():
         notes = task_text.split("📝 Notes:")[1].strip()
 
         group_id, plan_id = get_group_and_plan_ids()
-        create_planner_task(plan_id, title,_
+        create_planner_task(plan_id, title, notes)
+
+    except Exception as e:
+        task_text = f"Error: {str(e)}"
+
+    return f"<h2>Planner Task Created:</h2><pre>{task_text}</pre><br><a href='/'>Back</a>"
+
+@app.route("/login")
+def login():
+    oauth = OAuth2Session(MS_CLIENT_ID, scope=SCOPE, redirect_uri=MS_REDIRECT_URI)
+    auth_url, state = oauth.authorization_url(AUTH_ENDPOINT)
+    session["oauth_state"] = state
+    return redirect(auth_url)
+
+@app.route("/oauth-callback")
+def oauth_callback():
+    oauth = OAuth2Session(MS_CLIENT_ID, state=session.get("oauth_state"), redirect_uri=MS_REDIRECT_URI)
+    token = oauth.fetch_token(
+        TOKEN_ENDPOINT,
+        client_secret=MS_CLIENT_SECRET,
+        authorization_response=request.url
+    )
+    session["ms_token"] = token
+    return redirect(url_for("home"))
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
