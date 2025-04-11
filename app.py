@@ -1,4 +1,6 @@
 import os
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # 👈 Required for HTTP callback on Render
+
 import openai
 import requests
 from flask import Flask, request, redirect, session, url_for, render_template
@@ -6,7 +8,7 @@ from requests_oauthlib import OAuth2Session
 from openai import OpenAI
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # For session management
+app.secret_key = os.urandom(24)
 
 # Load environment variables
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -18,7 +20,7 @@ MS_REDIRECT_URI = os.environ.get("MS_REDIRECT_URI")
 # OpenAI setup
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# OAuth config (with Group.Read.All removed)
+# OAuth config (Group.Read.All removed)
 AUTHORITY = f"https://login.microsoftonline.com/{MS_TENANT_ID}"
 AUTH_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/authorize"
 TOKEN_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/token"
