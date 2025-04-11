@@ -1,5 +1,5 @@
 import os
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # 👈 Required for HTTP callback on Render
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Needed for OAuth callback on Render
 
 import openai
 import requests
@@ -47,12 +47,20 @@ def process_prompt():
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an assistant that converts user prompts into formatted Microsoft Planner tasks for the OE Action Review board. Follow the MS Planner Card Standard."
+                    "content": (
+                        "You are a Microsoft Planner task assistant for the OE Action Review board.\n"
+                        "Every output must follow this exact format:\n\n"
+                        "🪪 Title: <short, action-based title>\n"
+                        "🗂️ Bucket: <one of: EHS (Safety), CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
+                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> + any optional hashtags like #SEA01, #TOP3!, etc.\n"
+                        "📝 Notes: Expected Outcome: <clear description of success>\n"
+                        "📅 Start Date: <today’s date or provided>\n"
+                        "📅 Due Date: <if included or inferred>\n"
+                        "✅ Checklist (if PROJECT):\n- Task name – Owner – Due: <date>\n\n"
+                        "Respond ONLY in that format. Do not explain or include any commentary."
+                    )
                 },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "user", "content": prompt}
             ],
             max_tokens=500
         )
