@@ -1,5 +1,6 @@
 import os
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Needed for OAuth callback on Render
+from datetime import datetime
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 import openai
 import requests
@@ -20,7 +21,7 @@ MS_REDIRECT_URI = os.environ.get("MS_REDIRECT_URI")
 # OpenAI setup
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# OAuth config (Group.Read.All removed)
+# OAuth config
 AUTHORITY = f"https://login.microsoftonline.com/{MS_TENANT_ID}"
 AUTH_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/authorize"
 TOKEN_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/token"
@@ -40,6 +41,7 @@ def process_prompt():
         return redirect(url_for("login"))
 
     prompt = request.form.get("prompt", "")
+    today = datetime.now().strftime("%B %d, %Y")  # Format: April 11, 2025
 
     try:
         response = client.chat.completions.create(
@@ -48,14 +50,15 @@ def process_prompt():
                 {
                     "role": "system",
                     "content": (
-                        "You are a Microsoft Planner task assistant for the OE Action Review board.\n"
+                        f"You are a Microsoft Planner task assistant for the OE Action Review board.\n"
+                        f"Today’s date is {today}.\n"
                         "Every output must follow this exact format:\n\n"
                         "🪪 Title: <short, action-based title>\n"
                         "🗂️ Bucket: <one of: EHS (Safety), CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
                         "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> + any optional hashtags like #SEA01, #TOP3!, etc.\n"
                         "📝 Notes: Expected Outcome: <clear description of success>\n"
-                        "📅 Start Date: <today’s date or provided>\n"
-                        "📅 Due Date: <if included or inferred>\n"
+                        f"📅 Start Date: {today}\n"
+                        "📅 Due Date: <if included or inferred, or leave blank>\n"
                         "✅ Checklist (if PROJECT):\n- Task name – Owner – Due: <date>\n\n"
                         "Respond ONLY in that format. Do not explain or include any commentary."
                     )
