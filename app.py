@@ -11,17 +11,15 @@ from openai import OpenAI
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Environment vars
+# ENV variables
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID")
 MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET")
 MS_TENANT_ID = os.environ.get("MS_TENANT_ID")
 MS_REDIRECT_URI = os.environ.get("MS_REDIRECT_URI")
 
-# OpenAI setup
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# OAuth config
 AUTHORITY = f"https://login.microsoftonline.com/{MS_TENANT_ID}"
 AUTH_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/authorize"
 TOKEN_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/token"
@@ -31,9 +29,9 @@ SCOPE = [
     "User.Read"
 ]
 
-# Group and Plan Names (we’ll update this once we find the right one)
-TARGET_GROUP_NAME = "OE Action Review"
-TARGET_PLAN_NAME = "OE Action Review"
+# === REPLACE THESE AFTER YOU GET THE RIGHT IDs ===
+TARGET_GROUP_ID = "REPLACE_THIS"
+TARGET_PLAN_ID = "REPLACE_THIS"
 
 def get_ms_headers():
     return {
@@ -41,41 +39,17 @@ def get_ms_headers():
         "Content-Type": "application/json"
     }
 
-def get_group_and_plan_ids():
-    group_resp = requests.get(
-        "https://graph.microsoft.com/v1.0/groups",
-        headers=get_ms_headers()
-    )
-    groups = group_resp.json().get("value", [])
-    group_id = next((g["id"] for g in groups if g["displayName"] == TARGET_GROUP_NAME), None)
-
-    if not group_id:
-        raise Exception(f"Group '{TARGET_GROUP_NAME}' not found")
-
-    plan_resp = requests.get(
-        f"https://graph.microsoft.com/v1.0/groups/{group_id}/planner/plans",
-        headers=get_ms_headers()
-    )
-    plans = plan_resp.json().get("value", [])
-    plan_id = next((p["id"] for p in plans if p["title"] == TARGET_PLAN_NAME), None)
-
-    if not plan_id:
-        raise Exception(f"Plan '{TARGET_PLAN_NAME}' not found in group '{TARGET_GROUP_NAME}'")
-
-    return group_id, plan_id
-
-def create_planner_task(plan_id, title, notes):
+def create_planner_task(title, notes):
     task_resp = requests.post(
         "https://graph.microsoft.com/v1.0/planner/tasks",
         headers=get_ms_headers(),
         json={
-            "planId": plan_id,
+            "planId": TARGET_PLAN_ID,
             "title": title,
             "assignments": {},
-            "bucketId": None
+            "bucketId": None  # Optional
         }
     )
-
     if task_resp.status_code >= 400:
         raise Exception(f"Failed to create task: {task_resp.text}")
 
@@ -115,8 +89,7 @@ def process_prompt():
         title = task_text.split("🪪 Title:")[1].split("📝 Notes:")[0].strip()
         notes = task_text.split("📝 Notes:")[1].strip()
 
-        group_id, plan_id = get_group_and_plan_ids()
-        create_planner_task(plan_id, title, notes)
+        create_planner_task(title, notes)
 
     except Exception as e:
         task_text = f"Error: {str(e)}"
@@ -141,17 +114,16 @@ def oauth_callback():
     session["ms_token"] = token
     return redirect(url_for("home"))
 
-# 👇 THIS is the new route to list your groups
-@app.route("/groups")
-def list_groups():
+@app.route("/myplans")
+def list_user_plans():
     try:
-        group_resp = requests.get(
-            "https://graph.microsoft.com/v1.0/groups",
+        plans_resp = requests.get(
+            "https://graph.microsoft.com/v1.0/me/planner/plans",
             headers=get_ms_headers()
         )
-        groups = group_resp.json().get("value", [])
-        output = "\n".join([f"{g['displayName']} (ID: {g['id']})" for g in groups])
-        return f"<h2>Your Microsoft 365 Groups:</h2><pre>{output}</pre><br><a href='/'>Back</a>"
+        plans = plans_resp.json().get("value", [])
+        output = "\n".join([f"Plan Title: {p['title']}\nPlan ID: {p['id']}\nGroup ID: {p['owner']}\n---" for p in plans])
+        return f"<h2>Your Microsoft Planner Plans</h2><pre>{output}</pre><br><a href='/'>Back</a>"
     except Exception as e:
         return f"Error: {str(e)}"
 
