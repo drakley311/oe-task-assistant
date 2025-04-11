@@ -18,11 +18,15 @@ MS_REDIRECT_URI = os.environ.get("MS_REDIRECT_URI")
 # OpenAI setup
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# OAuth config
+# OAuth config (with Group.Read.All removed)
 AUTHORITY = f"https://login.microsoftonline.com/{MS_TENANT_ID}"
 AUTH_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/authorize"
 TOKEN_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/token"
-SCOPE = ["https://graph.microsoft.com/Tasks.ReadWrite", "https://graph.microsoft.com/Group.Read.All", "offline_access", "User.Read"]
+SCOPE = [
+    "https://graph.microsoft.com/Tasks.ReadWrite",
+    "offline_access",
+    "User.Read"
+]
 
 @app.route("/")
 def home():
@@ -39,8 +43,14 @@ def process_prompt():
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are an assistant that converts user prompts into formatted Microsoft Planner tasks for the OE Action Review board. Follow the MS Planner Card Standard."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are an assistant that converts user prompts into formatted Microsoft Planner tasks for the OE Action Review board. Follow the MS Planner Card Standard."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
             ],
             max_tokens=500
         )
@@ -67,7 +77,7 @@ def oauth_callback():
     )
     session["ms_token"] = token
     return redirect(url_for("home"))
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
