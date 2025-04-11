@@ -31,7 +31,7 @@ SCOPE = [
     "User.Read"
 ]
 
-# Group and Plan Names
+# Group and Plan Names (we’ll update this once we find the right one)
 TARGET_GROUP_NAME = "OE Action Review"
 TARGET_PLAN_NAME = "OE Action Review"
 
@@ -42,7 +42,6 @@ def get_ms_headers():
     }
 
 def get_group_and_plan_ids():
-    # 1. Get Group ID
     group_resp = requests.get(
         "https://graph.microsoft.com/v1.0/groups",
         headers=get_ms_headers()
@@ -53,7 +52,6 @@ def get_group_and_plan_ids():
     if not group_id:
         raise Exception(f"Group '{TARGET_GROUP_NAME}' not found")
 
-    # 2. Get Plan ID
     plan_resp = requests.get(
         f"https://graph.microsoft.com/v1.0/groups/{group_id}/planner/plans",
         headers=get_ms_headers()
@@ -74,7 +72,7 @@ def create_planner_task(plan_id, title, notes):
             "planId": plan_id,
             "title": title,
             "assignments": {},
-            "bucketId": None  # Optional: Add if needed
+            "bucketId": None
         }
     )
 
@@ -114,7 +112,6 @@ def process_prompt():
         )
         task_text = response.choices[0].message.content.strip()
 
-        # Extract title and notes from response
         title = task_text.split("🪪 Title:")[1].split("📝 Notes:")[0].strip()
         notes = task_text.split("📝 Notes:")[1].strip()
 
@@ -144,11 +141,7 @@ def oauth_callback():
     session["ms_token"] = token
     return redirect(url_for("home"))
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
-# 👇 Add this route to the bottom of your app.py, right before the `if __name__ == "__main__"` block
-
+# 👇 THIS is the new route to list your groups
 @app.route("/groups")
 def list_groups():
     try:
@@ -161,3 +154,7 @@ def list_groups():
         return f"<h2>Your Microsoft 365 Groups:</h2><pre>{output}</pre><br><a href='/'>Back</a>"
     except Exception as e:
         return f"Error: {str(e)}"
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
