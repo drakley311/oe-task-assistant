@@ -147,3 +147,17 @@ def oauth_callback():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+# 👇 Add this route to the bottom of your app.py, right before the `if __name__ == "__main__"` block
+
+@app.route("/groups")
+def list_groups():
+    try:
+        group_resp = requests.get(
+            "https://graph.microsoft.com/v1.0/groups",
+            headers=get_ms_headers()
+        )
+        groups = group_resp.json().get("value", [])
+        output = "\n".join([f"{g['displayName']} (ID: {g['id']})" for g in groups])
+        return f"<h2>Your Microsoft 365 Groups:</h2><pre>{output}</pre><br><a href='/'>Back</a>"
+    except Exception as e:
+        return f"Error: {str(e)}"
