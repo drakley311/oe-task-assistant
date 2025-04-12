@@ -29,30 +29,6 @@ SCOPE = [
     "User.Read"
 ]
 
-# ✅ HARDCODED Planner target — no more lookups
-TARGET_GROUP_ID = "51bc2ed3-a2b0-4930-aa2a-a87e76fcb55e"
-TARGET_PLAN_ID = "_npgkc4RPUydQZTi2F6T2mUABa7d"
-
-def get_ms_headers():
-    return {
-        "Authorization": f"Bearer {session['ms_token']['access_token']}",
-        "Content-Type": "application/json"
-    }
-
-def create_planner_task(title, notes):
-    task_resp = requests.post(
-        "https://graph.microsoft.com/v1.0/planner/tasks",
-        headers=get_ms_headers(),
-        json={
-            "planId": TARGET_PLAN_ID,
-            "title": title,
-            "assignments": {},
-            "bucketId": None  # Optional: add a fixed bucket ID if needed
-        }
-    )
-    if task_resp.status_code >= 400:
-        raise Exception(f"Failed to create task: {task_resp.text}")
-
 @app.route("/")
 def home():
     return render_template("form.html")
@@ -73,28 +49,28 @@ def process_prompt():
                     "role": "system",
                     "content": (
                         f"You are a Microsoft Planner task assistant for the OE Action Review board.\n"
-                        f"Today’s date is {today}.\n"
-                        "Every output must follow this format:\n\n"
-                        "🪪 Title: <title>\n"
-                        "📝 Notes: Expected Outcome: <clear outcome>\n"
-                        "Respond only with those 2 fields."
+                        f"Today’s date is {today}.\n\n"
+                        "Every response must follow this exact format:\n\n"
+                        "🪪 Title: <short, action-based title>\n"
+                        "🗂️ Bucket: <EHS (Safety), CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
+                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> + optional tags like #SEA01, #TOP3!, etc.\n"
+                        "📝 Notes: Expected Outcome: <concise definition of success>\n"
+                        "📅 Start Date: <today’s date or inferred>\n"
+                        "📅 Due Date: <if specified or inferred>\n"
+                        "✅ Checklist (if PROJECT):\n- Task name – Owner – Due: <date>\n\n"
+                        "Respond in this format only — do not add commentary or explanation."
                     )
                 },
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=300
+            max_tokens=500
         )
-        task_text = response.choices[0].message.content.strip()
-
-        title = task_text.split("🪪 Title:")[1].split("📝 Notes:")[0].strip()
-        notes = task_text.split("📝 Notes:")[1].strip()
-
-        create_planner_task(title, notes)
+        task_output = response.choices[0].message.content.strip()
 
     except Exception as e:
-        task_text = f"Error: {str(e)}"
+        task_output = f"Error: {str(e)}"
 
-    return f"<h2>Planner Task Created:</h2><pre>{task_text}</pre><br><a href='/'>Back</a>"
+    return f"<h2>Formatted Planner Task:</h2><pre>{task_output}</pre><br><a href='/'>Back</a>"
 
 @app.route("/login")
 def login():
@@ -114,7 +90,7 @@ def oauth_callback():
     session["ms_token"] = token
     return redirect(url_for("home"))
 
-# ✅ Required for Render to detect the port
+# Required by Render to detect your app's running port
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
