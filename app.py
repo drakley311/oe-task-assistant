@@ -50,15 +50,17 @@ def process_prompt():
                     "content": (
                         f"You are a Microsoft Planner task assistant for the OE Action Review board.\n"
                         f"Today’s date is {today}.\n\n"
-                        "Every response must follow this exact format:\n\n"
+                        "Every response must strictly follow this format:\n\n"
                         "🪪 Title: <short, action-based title>\n"
                         "🗂️ Bucket: <EHS (Safety), CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
                         "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> + optional tags like #SEA01, #TOP3!, etc.\n"
                         "📝 Notes: Expected Outcome: <concise definition of success>\n"
                         "📅 Start Date: <today’s date or inferred>\n"
                         "📅 Due Date: <if specified or inferred>\n"
-                        "✅ Checklist (if PROJECT):\n- Task name – Owner – Due: <date>\n\n"
-                        "Respond in this format only — do not add commentary or explanation."
+                        "✅ Checklist (if PROJECT only):\n"
+                        "- Each item must follow this format:\n"
+                        "- Task name – Owner – Due: <Month Day, Year>\n\n"
+                        "Respond in this format only. Do not explain. Do not add bullet points outside the ✅ Checklist block. Do not use ⬜ or ☑️."
                     )
                 },
                 {"role": "user", "content": prompt}
@@ -90,7 +92,7 @@ def oauth_callback():
     session["ms_token"] = token
     return redirect(url_for("home"))
 
-# Required by Render to detect your app's running port
+# Port binding for Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
