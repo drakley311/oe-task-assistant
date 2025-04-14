@@ -29,9 +29,18 @@ SCOPE = [
     "User.Read"
 ]
 
-# Hardcoded plan for OE Action Review board
-PLAN_ID = "_npgkc4RPUydQZTi2F6T2mUABa7d"  # Your Plan ID
-GROUP_ID = "51bc2ed3-a2b0-4930-aa2a-a87e76fcb55e"  # Your Group ID
+PLAN_ID = "_npgkc4RPUydQZTi2F6T2mUABa7d"
+GROUP_ID = "51bc2ed3-a2b0-4930-aa2a-a87e76fcb55e"
+
+# Mapping: GPT bucket label → Planner bucket ID
+BUCKET_MAP = {
+    "ICQA": "digBrtTP-0qe3SFx1LYKOWUAHwfJ",
+    "Network Strategy & Expansion": "3QLs64V7Y06T9DqNnGYUbWUAPutF",
+    "Business Insights": "f4AH9hLvqE2W2hwZ-fR0LWUAE9kJ",
+    "Facilities": "9SHeUNHAFUeJk-DmiEjqI2UAIGuP",
+    "CI & Learning": "DEkMb2XvVUy7FkgafKliGGUAOm16",
+    "EHS": "8PzOtLw06UO65thZZT3MumUALJTX"
+}
 
 @app.route("/")
 def home():
@@ -58,28 +67,25 @@ def process_after_login():
     today = datetime.now().strftime("%B %d, %Y")
 
     try:
-        # Prompt GPT to return fully structured OE task
+        # Get structured Planner card from GPT
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        f"You are a Microsoft Planner task assistant for the OE Action Review board.\n"
-                        f"Today is {today}.\n\n"
-                        "Respond in this exact format:\n"
-                        "🪪 Title: <title>\n"
-                        "🗂️ Bucket: <one of: EHS (Safety), CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
-                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> + optional tags like #SEA01, #TOP3!>\n"
-                        "📝 Notes: Expected Outcome: <clear success criteria>\n"
-                        "📅 Start Date: <today or inferred>\n"
-                        "📅 Due Date: <only if specified or implied>\n"
-                        "✅ Checklist (only if label is PROJECT):\n"
-                        "- Task name – Owner – Due: Month Day, Year\n\n"
-                        "If the user did not provide a bucket, label, or due date, say so clearly and ask them to clarify.\n"
-                        "Use today's date as Start Date if none is given.\n"
-                        "If PROJECT is selected but subtasks aren't provided, include checklist with placeholder items and owners.\n"
-                        "Respond with only the formatted card."
+                        f"You are a Microsoft Planner assistant for the OE Action Review board.\n"
+                        f"Today is {today}.\n"
+                        "Return only this format:\n\n"
+                        "🪪 Title: ...\n"
+                        "🗂️ Bucket: ...\n"
+                        "🏷️ Labels: ...\n"
+                        "📝 Notes: Expected Outcome: ...\n"
+                        "📅 Start Date: ...\n"
+                        "📅 Due Date: ...\n"
+                        "✅ Checklist:\n- Task – Owner – Due: ...\n\n"
+                        "Leave any field blank if the user didn't specify it, but include the field name.\n"
+                        "Use exact format — no extra commentary."
                     )
                 },
                 {"role": "user", "content": prompt}
@@ -89,34 +95,38 @@ def process_after_login():
 
         task_text = response.choices[0].message.content.strip()
 
-        # Extract title and notes from the response (simple line-by-line parse)
+        # Parse key fields
         lines = task_text.splitlines()
-        title = ""
-        notes = ""
-        label_line = ""
+        title, notes, bucket_label = "", "", ""
         for line in lines:
             if line.startswith("🪪 Title:"):
                 title = line.replace("🪪 Title:", "").strip()
             elif line.startswith("📝 Notes:"):
                 notes = line.replace("📝 Notes:", "").strip()
-            elif line.startswith("🏷️ Labels:"):
-                label_line = line.lower()
+            elif line.startswith("🗂️ Bucket:"):
+                bucket_label = line.replace("🗂️ Bucket:", "").strip()
 
-        # If "project" is in the labels line, post with checklist
-        is_project = "project" in label_line
+        # Try matching GPT's bucket label to a known Planner bucket ID
+        matched_bucket_id = None
+        for key, value in BUCKET_MAP.items():
+            if key.lower() in bucket_label.lower():
+                matched_bucket_id = value
+                break
 
-        # Create task in Planner
+        if not title:
+            raise Exception("Title missing from GPT response.")
+
+        # Construct Planner task payload
         task_payload = {
             "planId": PLAN_ID,
             "title": title,
-            "assignments": {},  # You can add user assignment here
+            "assignments": {}
         }
 
-        # Include notes as a "preview" (optional metadata block)
-        if notes:
-            task_payload["details"] = {"description": notes}
+        if matched_bucket_id:
+            task_payload["bucketId"] = matched_bucket_id
 
-        task_resp = requests.post(
+        create_task_resp = requests.post(
             "https://graph.microsoft.com/v1.0/planner/tasks",
             headers={
                 "Authorization": f"Bearer {session['ms_token']['access_token']}",
@@ -125,8 +135,8 @@ def process_after_login():
             json=task_payload
         )
 
-        if task_resp.status_code >= 400:
-            raise Exception(f"Planner task create failed: {task_resp.text}")
+        if create_task_resp.status_code >= 400:
+            raise Exception(f"Planner task creation failed: {create_task_resp.text}")
 
     except Exception as e:
         task_text = f"Error: {str(e)}"
