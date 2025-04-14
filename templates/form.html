@@ -55,15 +55,22 @@
       margin-top: 10px;
       background-color: #1565c0;
     }
+    #loading {
+      display: none;
+      margin-top: 10px;
+      font-style: italic;
+      color: #666;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>📝 OE Task Assistant</h1>
-    <form method="post" action="/">
+    <form method="post" action="/" onsubmit="showLoading()">
       <label for="prompt"><strong>Set OE Action:</strong></label>
-      <textarea id="prompt" name="prompt" placeholder="e.g. Launch Q3 audit protocol at IND01 by Friday"></textarea>
+      <textarea id="prompt" name="prompt" placeholder="e.g. Launch Q3 audit protocol at IND01 by Friday" required></textarea>
       <button type="submit">Generate Task</button>
+      <div id="loading">Submitting...</div>
     </form>
 
     {% if task_output %}
@@ -79,6 +86,9 @@
       navigator.clipboard.writeText(text).then(() => {
         alert("Task copied to clipboard!");
       });
+    }
+    function showLoading() {
+      document.getElementById("loading").style.display = "block";
     }
   </script>
 </body>
