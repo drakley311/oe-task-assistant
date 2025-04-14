@@ -191,7 +191,11 @@ def process_after_login():
             for idx, item in enumerate(checklist):
                 parts = item.split("–")
                 title = parts[0].strip() if len(parts) > 0 else f"Subtask {idx+1}"
-                checklist_dict[f"item{idx}"] = {"title": title, "isChecked": False}
+                checklist_dict[f"item{idx}"] = {
+                    "@odata.type": "microsoft.graph.plannerChecklistItem",
+                    "title": title,
+                    "isChecked": False
+                }
             patch_payload["checklist"] = checklist_dict
 
         if patch_payload:
