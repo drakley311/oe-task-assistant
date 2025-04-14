@@ -31,14 +31,26 @@ SCOPE = [
 
 @app.route("/")
 def home():
-    return render_template("form.html")
+    return render_template("form.html", task_output=None)
 
 @app.route("/", methods=["POST"])
 def process_prompt():
+    prompt = request.form.get("prompt", "")
+    session["pending_prompt"] = prompt
+
     if "ms_token" not in session:
         return redirect(url_for("login"))
 
-    prompt = request.form.get("prompt", "")
+    return redirect(url_for("process_after_login"))
+
+@app.route("/process-after-login")
+def process_after_login():
+    prompt = session.pop("pending_prompt", None)
+    task_output = ""
+
+    if not prompt:
+        return redirect(url_for("home"))
+
     today = datetime.now().strftime("%B %d, %Y")
 
     try:
@@ -48,31 +60,32 @@ def process_prompt():
                 {
                     "role": "system",
                     "content": (
-                        f"You are a Microsoft Planner task assistant for the OE Action Review board.\n"
-                        f"Today’s date is {today}.\n\n"
-                        "Every response must strictly follow this format:\n\n"
-                        "🪪 Title: <short, action-based title>\n"
-                        "🗂️ Bucket: <EHS (Safety), CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
-                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> + optional tags like #SEA01, #TOP3!, etc.\n"
-                        "📝 Notes: Expected Outcome: <concise definition of success>\n"
-                        "📅 Start Date: <today’s date or inferred>\n"
-                        "📅 Due Date: <if specified or inferred>\n"
-                        "✅ Checklist (if PROJECT only):\n"
-                        "- Each item must follow this format:\n"
-                        "- Task name – Owner – Due: <Month Day, Year>\n\n"
-                        "Respond in this format only. Do not explain. Do not add bullet points outside the ✅ Checklist block. Do not use ⬜ or ☑️."
+                        f"You are a Microsoft Planner assistant for the OE Action Review board.\n"
+                        f"Today is {today}.\n"
+                        "Respond using this exact format, no exceptions. Here is an example:\n\n"
+                        "🪪 Title: Launch Q3 training at LNK02\n"
+                        "🗂️ Bucket: CI & Learning\n"
+                        "🏷️ Labels: PROJECT #LNK02 #TOP3!\n"
+                        "📝 Notes: Expected Outcome: All associates trained on new scanning SOP before July 1.\n"
+                        "📅 Start Date: June 24, 2025\n"
+                        "📅 Due Date: June 30, 2025\n"
+                        "✅ Checklist:\n"
+                        "- Finalize materials – J. Smith – Due: June 25, 2025\n"
+                        "- Schedule sessions – L. West – Due: June 26, 2025\n"
+                        "- Deliver training – Area Managers – Due: June 28, 2025\n\n"
+                        "Now respond with your own version in the same format. Do not use ⏬, ⬜, ☑️, or other symbols."
                     )
                 },
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=500
+            max_tokens=600
         )
         task_output = response.choices[0].message.content.strip()
 
     except Exception as e:
         task_output = f"Error: {str(e)}"
 
-    return f"<h2>Formatted Planner Task:</h2><pre>{task_output}</pre><br><a href='/'>Back</a>"
+    return render_template("form.html", task_output=task_output)
 
 @app.route("/login")
 def login():
@@ -90,9 +103,12 @@ def oauth_callback():
         authorization_response=request.url
     )
     session["ms_token"] = token
+
+    if "pending_prompt" in session:
+        return redirect(url_for("process_after_login"))
+
     return redirect(url_for("home"))
 
-# Port binding for Render
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
