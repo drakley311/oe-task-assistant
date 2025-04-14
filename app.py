@@ -29,7 +29,6 @@ SCOPE = ["https://graph.microsoft.com/Tasks.ReadWrite", "offline_access", "User.
 PLAN_ID = "_npgkc4RPUydQZTi2F6T2mUABa7d"
 GROUP_ID = "51bc2ed3-a2b0-4930-aa2a-a87e76fcb55e"
 
-# Bucket label → ID
 BUCKET_MAP = {
     "ICQA": "digBrtTP-0qe3SFx1LYKOWUAHwfJ",
     "Network Strategy & Expansion": "3QLs64V7Y06T9DqNnGYUbWUAPutF",
@@ -39,7 +38,6 @@ BUCKET_MAP = {
     "EHS": "8PzOtLw06UO65thZZT3MumUALJTX"
 }
 
-# Label text → categoryX mapping
 LABEL_MAP = {
     "Just Do It": "category20",
     "PROJECT": "category21",
@@ -52,6 +50,7 @@ LABEL_MAP = {
     "#LNK02": "category15",
     "#AVP01": "category23"
 }
+
 @app.route("/")
 def home():
     return render_template("form.html", task_output=None)
@@ -93,13 +92,7 @@ def process_after_login():
                         "📅 Start Date: <calendar date, always include — use today if not provided>\n"
                         "📅 Due Date: <calendar date, inferred from phrasing like 'by next Friday'>\n"
                         "✅ Checklist:\n"
-                        "- Subtask name – Owner – Due: Month Day, Year\n"
-                        "- ... (include 2–4 subtasks if label is PROJECT)\n\n"
-                        "🛑 Do not invent new buckets or labels. Use only the list provided.\n"
-                        "✅ Format all dates as full month day, year (e.g., April 25, 2025)\n"
-                        "✅ Infer missing details where possible.\n"
-                        "✅ Leave [Owner] as placeholder if not provided by the user.\n"
-                        "Respond ONLY with this formatted task. No extra commentary."
+                        "- Subtask name – Owner – Due: Month Day, Year"
                     )
                 },
                 {"role": "user", "content": prompt}
@@ -120,7 +113,7 @@ def process_after_login():
             elif line.startswith("🗂️ Bucket:"):
                 bucket_label = line.replace("🗂️ Bucket:", "").strip()
             elif line.startswith("🏷️ Labels:"):
-                labels = [l.strip() for l in line.replace("🏷️ Labels:", "").split() if l.strip()]
+                labels = [l.strip() for l in line.replace("🏷️ Labels:", "").split(",")]
             elif line.startswith("📝 Notes:"):
                 notes = line.replace("📝 Notes:", "").strip()
             elif line.startswith("📅 Start Date:"):
@@ -130,32 +123,28 @@ def process_after_login():
             elif line.startswith("- "):
                 checklist.append(line.replace("- ", "").strip())
 
-        # Bucket lookup
         matched_bucket_id = None
         for key, value in BUCKET_MAP.items():
             if key.lower() in bucket_label.lower():
                 matched_bucket_id = value
                 break
 
-        # Label lookup
         categories = {}
         for label in labels:
             mapped = LABEL_MAP.get(label)
             if mapped:
                 categories[mapped] = True
 
-        # Dates
         def to_iso(date_str):
             try:
                 dt = dateparser.parse(date_str)
-                return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")  # Add Z for UTC
+                return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
             except:
                 return None
 
         start_iso = to_iso(start_date)
         due_iso = to_iso(due_date)
 
-        # Create main task
         payload = {
             "planId": PLAN_ID,
             "title": title,
@@ -180,52 +169,30 @@ def process_after_login():
 
         task_id = task_resp.json().get("id")
 
-        # Add notes
-        # Get correct ETag from task details
-details_resp = requests.get(
-    f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
-    headers={
-        "Authorization": f"Bearer {session['ms_token']['access_token']}"
-    }
-)
+        # Retrieve correct ETag for PATCH
+        details_resp = requests.get(
+            f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+            headers={
+                "Authorization": f"Bearer {session['ms_token']['access_token']}"
+            }
+        )
 
-if details_resp.status_code >= 400:
-    raise Exception(f"Failed to retrieve task details: {details_resp.text}")
+        if details_resp.status_code >= 400:
+            raise Exception(f"Failed to retrieve task details: {details_resp.text}")
 
-etag = details_resp.headers.get("ETag")
+        etag = details_resp.headers.get("ETag")
 
-# Add notes
-if notes:
-    patch_notes = requests.patch(
-        f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
-        headers={
-            "Authorization": f"Bearer {session['ms_token']['access_token']}",
-            "Content-Type": "application/json",
-            "If-Match": etag
-        },
-        json={"description": notes}
-    )
+        if notes:
+            requests.patch(
+                f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+                headers={
+                    "Authorization": f"Bearer {session['ms_token']['access_token']}",
+                    "Content-Type": "application/json",
+                    "If-Match": etag
+                },
+                json={"description": notes}
+            )
 
-# Add checklist
-if checklist:
-    checklist_dict = {}
-    for idx, item in enumerate(checklist):
-        parts = item.split("–")
-        title = parts[0].strip() if len(parts) > 0 else f"Subtask {idx+1}"
-        checklist_dict[f"item{idx}"] = {"title": title, "isChecked": False}
-
-    patch_checklist = requests.patch(
-        f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
-        headers={
-            "Authorization": f"Bearer {session['ms_token']['access_token']}",
-            "Content-Type": "application/json",
-            "If-Match": etag
-        },
-        json={"checklist": checklist_dict}
-    )
-
-
-        # Add checklist
         if checklist:
             checklist_dict = {}
             for idx, item in enumerate(checklist):
@@ -238,7 +205,7 @@ if checklist:
                 headers={
                     "Authorization": f"Bearer {session['ms_token']['access_token']}",
                     "Content-Type": "application/json",
-                    "If-Match": "*"
+                    "If-Match": etag
                 },
                 json={"checklist": checklist_dict}
             )
