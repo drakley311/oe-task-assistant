@@ -73,7 +73,7 @@ def process_after_login():
     if not prompt:
         return redirect(url_for("home"))
 
-    today = datetime.now().strftime("%B %d, %Y")
+    today = datetime.utcnow().strftime("%B %d, %Y")
 
     try:
         response = client.chat.completions.create(
@@ -113,7 +113,7 @@ def process_after_login():
             elif line.startswith("🗂️ Bucket:"):
                 bucket_label = line.replace("🗂️ Bucket:", "").strip()
             elif line.startswith("🏷️ Labels:"):
-                labels = [l.strip() for l in line.replace("🏷️ Labels:", "").split(",")]
+                labels = [l.strip().strip(",") for l in line.replace("🏷️ Labels:", "").split()]
             elif line.startswith("📝 Notes:"):
                 notes = line.replace("📝 Notes:", "").strip()
             elif line.startswith("📅 Start Date:"):
@@ -169,7 +169,7 @@ def process_after_login():
 
         task_id = task_resp.json().get("id")
 
-        # Retrieve correct ETag for PATCH
+        # Retrieve ETag for PATCH
         details_resp = requests.get(
             f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
             headers={
@@ -183,30 +183,30 @@ def process_after_login():
         etag = details_resp.headers.get("ETag")
 
         patch_payload = {}
+        if notes:
+            patch_payload["description"] = notes
 
-if notes:
-    patch_payload["description"] = notes
+        if checklist:
+            checklist_dict = {}
+            for idx, item in enumerate(checklist):
+                parts = item.split("–")
+                title = parts[0].strip() if len(parts) > 0 else f"Subtask {idx+1}"
+                checklist_dict[f"item{idx}"] = {"title": title, "isChecked": False}
+            patch_payload["checklist"] = checklist_dict
 
-if checklist:
-    checklist_dict = {}
-    for idx, item in enumerate(checklist):
-        parts = item.split("–")
-        title = parts[0].strip() if len(parts) > 0 else f"Subtask {idx+1}"
-        checklist_dict[f"item{idx}"] = {"title": title, "isChecked": False}
-    patch_payload["checklist"] = checklist_dict
+        if patch_payload:
+            patch_resp = requests.patch(
+                f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+                headers={
+                    "Authorization": f"Bearer {session['ms_token']['access_token']}",
+                    "Content-Type": "application/json",
+                    "If-Match": etag
+                },
+                json=patch_payload
+            )
 
-# Only PATCH if there's something to patch
-if patch_payload:
-    requests.patch(
-        f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
-        headers={
-            "Authorization": f"Bearer {session['ms_token']['access_token']}",
-            "Content-Type": "application/json",
-            "If-Match": etag
-        },
-        json=patch_payload
-    )
-
+            if patch_resp.status_code >= 400:
+                raise Exception(f"Failed to patch task details: {patch_resp.text}")
 
     except Exception as e:
         task_output = f"Error: {str(e)}"
