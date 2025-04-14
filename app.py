@@ -83,11 +83,23 @@ def process_after_login():
                 {
                     "role": "system",
                     "content": (
-                        f"You are a Microsoft Planner assistant. Today is {today}.\n"
-                        "Return all fields in this exact format:\n"
-                        "🪪 Title: ...\n🗂️ Bucket: ...\n🏷️ Labels: ...\n📝 Notes: Expected Outcome: ...\n"
-                        "📅 Start Date: ...\n📅 Due Date: ...\n"
-                        "✅ Checklist:\n- Task – Owner – Due: Month Day, Year"
+                        "You are a Microsoft Planner assistant for the OE Action Review board.\n"
+                        "Today is April 14, 2025.\n\n"
+                        "Return your response ONLY in this structured format:\n"
+                        "🪪 Title: <short, clear task title>\n"
+                        "🗂️ Bucket: <choose exactly one from: EHS (Safety), CI & Learning (Variable Cost), Facilities (Fixed Cost), Business Insights, Network Strategy & Expansion, ICQA (Quality & Delivery)>\n"
+                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> plus any optional like #SEA01, #AVP01, #TOP3!>\n"
+                        "📝 Notes: Expected Outcome: <clear success criteria>\n"
+                        "📅 Start Date: <calendar date, always include — use today if not provided>\n"
+                        "📅 Due Date: <calendar date, inferred from phrasing like 'by next Friday'>\n"
+                        "✅ Checklist:\n"
+                        "- Subtask name – Owner – Due: Month Day, Year\n"
+                        "- ... (include 2–4 subtasks if label is PROJECT)\n\n"
+                        "🛑 Do not invent new buckets or labels. Use only the list provided.\n"
+                        "✅ Format all dates as full month day, year (e.g., April 25, 2025)\n"
+                        "✅ Infer missing details where possible.\n"
+                        "✅ Leave [Owner] as placeholder if not provided by the user.\n"
+                        "Respond ONLY with this formatted task. No extra commentary."
                     )
                 },
                 {"role": "user", "content": prompt}
