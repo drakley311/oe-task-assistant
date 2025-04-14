@@ -133,12 +133,12 @@ def process_after_login():
                 categories[mapped] = True
 
         # Dates
-     def to_iso(date_str):
-    try:
-        dt = dateparser.parse(date_str)
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # Add Z for UTC
-    except:
-        return None
+        def to_iso(date_str):
+            try:
+                dt = dateparser.parse(date_str)
+                return dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # Add Z for UTC
+            except:
+                return None
 
         start_iso = to_iso(start_date)
         due_iso = to_iso(due_date)
