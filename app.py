@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from dateutil import parser as dateparser
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 import openai
@@ -23,16 +24,12 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 AUTHORITY = f"https://login.microsoftonline.com/{MS_TENANT_ID}"
 AUTH_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/authorize"
 TOKEN_ENDPOINT = f"{AUTHORITY}/oauth2/v2.0/token"
-SCOPE = [
-    "https://graph.microsoft.com/Tasks.ReadWrite",
-    "offline_access",
-    "User.Read"
-]
+SCOPE = ["https://graph.microsoft.com/Tasks.ReadWrite", "offline_access", "User.Read"]
 
 PLAN_ID = "_npgkc4RPUydQZTi2F6T2mUABa7d"
 GROUP_ID = "51bc2ed3-a2b0-4930-aa2a-a87e76fcb55e"
 
-# Mapping: GPT bucket label → Planner bucket ID
+# Bucket label → ID
 BUCKET_MAP = {
     "ICQA": "digBrtTP-0qe3SFx1LYKOWUAHwfJ",
     "Network Strategy & Expansion": "3QLs64V7Y06T9DqNnGYUbWUAPutF",
@@ -42,6 +39,19 @@ BUCKET_MAP = {
     "EHS": "8PzOtLw06UO65thZZT3MumUALJTX"
 }
 
+# Label text → categoryX mapping
+LABEL_MAP = {
+    "Just Do It": "category20",
+    "PROJECT": "category21",
+    "LSW/Routine": "category5",
+    "#SameDayDelivery": "category1",
+    "#AllFCs": "category2",
+    "#SEA01": "category7",
+    "#TOP3!": "category13",
+    "#IND01": "category9",
+    "#LNK02": "category15",
+    "#AVP01": "category23"
+}
 @app.route("/")
 def home():
     return render_template("form.html", task_output=None)
@@ -67,83 +77,130 @@ def process_after_login():
     today = datetime.now().strftime("%B %d, %Y")
 
     try:
-        # Ask GPT for structured planner card with improved formatting
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        f"You are a Microsoft Planner assistant for the OE Action Review board.\n"
-                        f"Today’s date is {today}.\n\n"
-                        "Respond ONLY using this format:\n"
-                        "🪪 Title: <short title>\n"
-                        "🗂️ Bucket: <must match one of: EHS, CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
-                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine; optional: #SEA01, #TOP3!, etc.>\n"
-                        "📝 Notes: Expected Outcome: <clear, concise success criteria>\n"
-                        "📅 Start Date: <always include, use today if not stated>\n"
-                        "📅 Due Date: <convert phrases like 'next Friday' to full date>\n"
-                        "✅ Checklist:\n"
-                        "- Task – Owner – Due: Month Day, Year\n\n"
-                        "🛑 Do not leave any section blank. If unknown, provide a reasonable placeholder.\n"
-                        "✅ Always infer the most likely bucket based on keywords (e.g., 'safety' → EHS).\n"
-                        "✅ Always return all fields — do NOT say 'unspecified' or 'not provided'.\n"
-                        "✅ Return this output and nothing else."
+                        f"You are a Microsoft Planner assistant. Today is {today}.\n"
+                        "Return all fields in this exact format:\n"
+                        "🪪 Title: ...\n🗂️ Bucket: ...\n🏷️ Labels: ...\n📝 Notes: Expected Outcome: ...\n"
+                        "📅 Start Date: ...\n📅 Due Date: ...\n"
+                        "✅ Checklist:\n- Task – Owner – Due: Month Day, Year"
                     )
                 },
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=700
+            max_tokens=800
         )
 
-        task_text = response.choices[0].message.content.strip()
+        task_output = response.choices[0].message.content.strip()
+        lines = task_output.splitlines()
 
-        # Parse key fields
-        lines = task_text.splitlines()
-        title, notes, bucket_label = "", "", ""
+        title = notes = bucket_label = start_date = due_date = ""
+        labels = []
+        checklist = []
+
         for line in lines:
             if line.startswith("🪪 Title:"):
                 title = line.replace("🪪 Title:", "").strip()
-            elif line.startswith("📝 Notes:"):
-                notes = line.replace("📝 Notes:", "").strip()
             elif line.startswith("🗂️ Bucket:"):
                 bucket_label = line.replace("🗂️ Bucket:", "").strip()
+            elif line.startswith("🏷️ Labels:"):
+                labels = [l.strip() for l in line.replace("🏷️ Labels:", "").split() if l.strip()]
+            elif line.startswith("📝 Notes:"):
+                notes = line.replace("📝 Notes:", "").strip()
+            elif line.startswith("📅 Start Date:"):
+                start_date = line.replace("📅 Start Date:", "").strip()
+            elif line.startswith("📅 Due Date:"):
+                due_date = line.replace("📅 Due Date:", "").strip()
+            elif line.startswith("- "):
+                checklist.append(line.replace("- ", "").strip())
 
-        # Match GPT bucket label to Planner ID
+        # Bucket lookup
         matched_bucket_id = None
         for key, value in BUCKET_MAP.items():
             if key.lower() in bucket_label.lower():
                 matched_bucket_id = value
                 break
 
-        if not title:
-            raise Exception("Title missing from GPT response.")
+        # Label lookup
+        categories = {}
+        for label in labels:
+            mapped = LABEL_MAP.get(label)
+            if mapped:
+                categories[mapped] = True
 
-        task_payload = {
+        # Dates
+        def to_iso(date_str):
+            try:
+                return dateparser.parse(date_str).isoformat()
+            except:
+                return None
+
+        start_iso = to_iso(start_date)
+        due_iso = to_iso(due_date)
+
+        # Create main task
+        payload = {
             "planId": PLAN_ID,
             "title": title,
-            "assignments": {}
+            "assignments": {},
+            "startDateTime": start_iso,
+            "dueDateTime": due_iso,
+            "bucketId": matched_bucket_id,
+            "appliedCategories": categories
         }
 
-        if matched_bucket_id:
-            task_payload["bucketId"] = matched_bucket_id
-
-        create_task_resp = requests.post(
+        task_resp = requests.post(
             "https://graph.microsoft.com/v1.0/planner/tasks",
             headers={
                 "Authorization": f"Bearer {session['ms_token']['access_token']}",
                 "Content-Type": "application/json"
             },
-            json=task_payload
+            json=payload
         )
 
-        if create_task_resp.status_code >= 400:
-            raise Exception(f"Planner task creation failed: {create_task_resp.text}")
+        if task_resp.status_code >= 400:
+            raise Exception(f"Task failed: {task_resp.text}")
+
+        task_id = task_resp.json().get("id")
+
+        # Add notes
+        if notes:
+            requests.patch(
+                f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+                headers={
+                    "Authorization": f"Bearer {session['ms_token']['access_token']}",
+                    "Content-Type": "application/json",
+                    "If-Match": task_resp.headers.get("ETag", "*")
+                },
+                json={"description": notes}
+            )
+
+        # Add checklist
+        if checklist:
+            checklist_dict = {}
+            for idx, item in enumerate(checklist):
+                parts = item.split("–")
+                title = parts[0].strip() if len(parts) > 0 else f"Subtask {idx+1}"
+                checklist_dict[f"item{idx}"] = {"title": title, "isChecked": False}
+
+            requests.patch(
+                f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+                headers={
+                    "Authorization": f"Bearer {session['ms_token']['access_token']}",
+                    "Content-Type": "application/json",
+                    "If-Match": "*"
+                },
+                json={"checklist": checklist_dict}
+            )
 
     except Exception as e:
-        task_text = f"Error: {str(e)}"
+        task_output = f"Error: {str(e)}"
 
-    return render_template("form.html", task_output=task_text)
+    return render_template("form.html", task_output=task_output)
 
 @app.route("/login")
 def login():
