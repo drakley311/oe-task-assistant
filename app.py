@@ -29,6 +29,10 @@ SCOPE = [
     "User.Read"
 ]
 
+# Hardcoded plan for OE Action Review board
+PLAN_ID = "_npgkc4RPUydQZTi2F6T2mUABa7d"  # Your Plan ID
+GROUP_ID = "51bc2ed3-a2b0-4930-aa2a-a87e76fcb55e"  # Your Group ID
+
 @app.route("/")
 def home():
     return render_template("form.html", task_output=None)
@@ -54,38 +58,80 @@ def process_after_login():
     today = datetime.now().strftime("%B %d, %Y")
 
     try:
+        # Prompt GPT to return fully structured OE task
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        f"You are a Microsoft Planner assistant for the OE Action Review board.\n"
-                        f"Today is {today}.\n"
-                        "Respond using this exact format, no exceptions. Here is an example:\n\n"
-                        "🪪 Title: Launch Q3 training at LNK02\n"
-                        "🗂️ Bucket: CI & Learning\n"
-                        "🏷️ Labels: PROJECT #LNK02 #TOP3!\n"
-                        "📝 Notes: Expected Outcome: All associates trained on new scanning SOP before July 1.\n"
-                        "📅 Start Date: June 24, 2025\n"
-                        "📅 Due Date: June 30, 2025\n"
-                        "✅ Checklist:\n"
-                        "- Finalize materials – J. Smith – Due: June 25, 2025\n"
-                        "- Schedule sessions – L. West – Due: June 26, 2025\n"
-                        "- Deliver training – Area Managers – Due: June 28, 2025\n\n"
-                        "Now respond with your own version in the same format. Do not use ⏬, ⬜, ☑️, or other symbols."
+                        f"You are a Microsoft Planner task assistant for the OE Action Review board.\n"
+                        f"Today is {today}.\n\n"
+                        "Respond in this exact format:\n"
+                        "🪪 Title: <title>\n"
+                        "🗂️ Bucket: <one of: EHS (Safety), CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
+                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine> + optional tags like #SEA01, #TOP3!>\n"
+                        "📝 Notes: Expected Outcome: <clear success criteria>\n"
+                        "📅 Start Date: <today or inferred>\n"
+                        "📅 Due Date: <only if specified or implied>\n"
+                        "✅ Checklist (only if label is PROJECT):\n"
+                        "- Task name – Owner – Due: Month Day, Year\n\n"
+                        "If the user did not provide a bucket, label, or due date, say so clearly and ask them to clarify.\n"
+                        "Use today's date as Start Date if none is given.\n"
+                        "If PROJECT is selected but subtasks aren't provided, include checklist with placeholder items and owners.\n"
+                        "Respond with only the formatted card."
                     )
                 },
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=600
+            max_tokens=700
         )
-        task_output = response.choices[0].message.content.strip()
+
+        task_text = response.choices[0].message.content.strip()
+
+        # Extract title and notes from the response (simple line-by-line parse)
+        lines = task_text.splitlines()
+        title = ""
+        notes = ""
+        label_line = ""
+        for line in lines:
+            if line.startswith("🪪 Title:"):
+                title = line.replace("🪪 Title:", "").strip()
+            elif line.startswith("📝 Notes:"):
+                notes = line.replace("📝 Notes:", "").strip()
+            elif line.startswith("🏷️ Labels:"):
+                label_line = line.lower()
+
+        # If "project" is in the labels line, post with checklist
+        is_project = "project" in label_line
+
+        # Create task in Planner
+        task_payload = {
+            "planId": PLAN_ID,
+            "title": title,
+            "assignments": {},  # You can add user assignment here
+        }
+
+        # Include notes as a "preview" (optional metadata block)
+        if notes:
+            task_payload["details"] = {"description": notes}
+
+        task_resp = requests.post(
+            "https://graph.microsoft.com/v1.0/planner/tasks",
+            headers={
+                "Authorization": f"Bearer {session['ms_token']['access_token']}",
+                "Content-Type": "application/json"
+            },
+            json=task_payload
+        )
+
+        if task_resp.status_code >= 400:
+            raise Exception(f"Planner task create failed: {task_resp.text}")
 
     except Exception as e:
-        task_output = f"Error: {str(e)}"
+        task_text = f"Error: {str(e)}"
 
-    return render_template("form.html", task_output=task_output)
+    return render_template("form.html", task_output=task_text)
 
 @app.route("/login")
 def login():
