@@ -67,7 +67,7 @@ def process_after_login():
     today = datetime.now().strftime("%B %d, %Y")
 
     try:
-        # Get structured Planner card from GPT
+        # Ask GPT for structured planner card with improved formatting
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -75,17 +75,20 @@ def process_after_login():
                     "role": "system",
                     "content": (
                         f"You are a Microsoft Planner assistant for the OE Action Review board.\n"
-                        f"Today is {today}.\n"
-                        "Return only this format:\n\n"
-                        "🪪 Title: ...\n"
-                        "🗂️ Bucket: ...\n"
-                        "🏷️ Labels: ...\n"
-                        "📝 Notes: Expected Outcome: ...\n"
-                        "📅 Start Date: ...\n"
-                        "📅 Due Date: ...\n"
-                        "✅ Checklist:\n- Task – Owner – Due: ...\n\n"
-                        "Leave any field blank if the user didn't specify it, but include the field name.\n"
-                        "Use exact format — no extra commentary."
+                        f"Today’s date is {today}.\n\n"
+                        "Respond ONLY using this format:\n"
+                        "🪪 Title: <short title>\n"
+                        "🗂️ Bucket: <must match one of: EHS, CI & Learning, Facilities, Business Insights, Network Strategy & Expansion, ICQA>\n"
+                        "🏷️ Labels: <REQUIRED: Just Do It, PROJECT, or LSW/Routine; optional: #SEA01, #TOP3!, etc.>\n"
+                        "📝 Notes: Expected Outcome: <clear, concise success criteria>\n"
+                        "📅 Start Date: <always include, use today if not stated>\n"
+                        "📅 Due Date: <convert phrases like 'next Friday' to full date>\n"
+                        "✅ Checklist:\n"
+                        "- Task – Owner – Due: Month Day, Year\n\n"
+                        "🛑 Do not leave any section blank. If unknown, provide a reasonable placeholder.\n"
+                        "✅ Always infer the most likely bucket based on keywords (e.g., 'safety' → EHS).\n"
+                        "✅ Always return all fields — do NOT say 'unspecified' or 'not provided'.\n"
+                        "✅ Return this output and nothing else."
                     )
                 },
                 {"role": "user", "content": prompt}
@@ -106,7 +109,7 @@ def process_after_login():
             elif line.startswith("🗂️ Bucket:"):
                 bucket_label = line.replace("🗂️ Bucket:", "").strip()
 
-        # Try matching GPT's bucket label to a known Planner bucket ID
+        # Match GPT bucket label to Planner ID
         matched_bucket_id = None
         for key, value in BUCKET_MAP.items():
             if key.lower() in bucket_label.lower():
@@ -116,7 +119,6 @@ def process_after_login():
         if not title:
             raise Exception("Title missing from GPT response.")
 
-        # Construct Planner task payload
         task_payload = {
             "planId": PLAN_ID,
             "title": title,
