@@ -1,13 +1,85 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <title>OE Task Assistant</title>
-  </head>
-  <body>
-    <h1>Submit an OE Action Prompt</h1>
-    <form action="/" method="post">
-      <textarea name="prompt" rows="4" cols="50" placeholder="Set OE Action: ..."></textarea><br><br>
-      <input type="submit" value="Submit">
+<head>
+  <title>OE Task Assistant</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 60px;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      max-width: 700px;
+      width: 100%;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    textarea {
+      width: 100%;
+      height: 120px;
+      padding: 10px;
+      margin-top: 10px;
+      margin-bottom: 20px;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      background-color: #2e7d32;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    pre {
+      white-space: pre-wrap;
+      background: #f1f1f1;
+      padding: 20px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-family: monospace;
+    }
+    #copyBtn {
+      margin-top: 10px;
+      background-color: #1565c0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📝 OE Task Assistant</h1>
+    <form method="post" action="/">
+      <label for="prompt"><strong>Set OE Action:</strong></label>
+      <textarea id="prompt" name="prompt" placeholder="e.g. Launch Q3 audit protocol at IND01 by Friday"></textarea>
+      <button type="submit">Generate Task</button>
     </form>
-  </body>
+
+    {% if task_output %}
+      <h2>Formatted Planner Task:</h2>
+      <pre id="output">{{ task_output }}</pre>
+      <button id="copyBtn" onclick="copyText()">Copy to Clipboard</button>
+    {% endif %}
+  </div>
+
+  <script>
+    function copyText() {
+      const text = document.getElementById("output").innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Task copied to clipboard!");
+      });
+    }
+  </script>
+</body>
 </html>
