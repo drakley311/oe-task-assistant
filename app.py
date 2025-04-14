@@ -148,7 +148,7 @@ def process_after_login():
         def to_iso(date_str):
             try:
                 dt = dateparser.parse(date_str)
-                return dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # Add Z for UTC
+                return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")  # Add Z for UTC
             except:
                 return None
 
