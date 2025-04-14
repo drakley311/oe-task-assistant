@@ -181,16 +181,49 @@ def process_after_login():
         task_id = task_resp.json().get("id")
 
         # Add notes
-        if notes:
-            requests.patch(
-                f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
-                headers={
-                    "Authorization": f"Bearer {session['ms_token']['access_token']}",
-                    "Content-Type": "application/json",
-                    "If-Match": task_resp.headers.get("ETag", "*")
-                },
-                json={"description": notes}
-            )
+        # Get correct ETag from task details
+details_resp = requests.get(
+    f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+    headers={
+        "Authorization": f"Bearer {session['ms_token']['access_token']}"
+    }
+)
+
+if details_resp.status_code >= 400:
+    raise Exception(f"Failed to retrieve task details: {details_resp.text}")
+
+etag = details_resp.headers.get("ETag")
+
+# Add notes
+if notes:
+    patch_notes = requests.patch(
+        f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+        headers={
+            "Authorization": f"Bearer {session['ms_token']['access_token']}",
+            "Content-Type": "application/json",
+            "If-Match": etag
+        },
+        json={"description": notes}
+    )
+
+# Add checklist
+if checklist:
+    checklist_dict = {}
+    for idx, item in enumerate(checklist):
+        parts = item.split("–")
+        title = parts[0].strip() if len(parts) > 0 else f"Subtask {idx+1}"
+        checklist_dict[f"item{idx}"] = {"title": title, "isChecked": False}
+
+    patch_checklist = requests.patch(
+        f"https://graph.microsoft.com/v1.0/planner/tasks/{task_id}/details",
+        headers={
+            "Authorization": f"Bearer {session['ms_token']['access_token']}",
+            "Content-Type": "application/json",
+            "If-Match": etag
+        },
+        json={"checklist": checklist_dict}
+    )
+
 
         # Add checklist
         if checklist:
